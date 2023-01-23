@@ -2,7 +2,7 @@
 // source: v1/grandpa.proto
 
 package ibc_lightclients_grandpa_v1
-
+/*
 import (
 	fmt "fmt"
 	proto "github.com/gogo/protobuf/proto"
@@ -2755,3 +2755,4 @@ var (
 	ErrIntOverflowGrandpa          = fmt.Errorf("proto: integer overflow")
 	ErrUnexpectedEndOfGroupGrandpa = fmt.Errorf("proto: unexpected end of group")
 )
+*/

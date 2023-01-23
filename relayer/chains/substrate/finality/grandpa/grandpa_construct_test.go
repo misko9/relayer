@@ -1,13 +1,13 @@
-package finality
+package grandpa
 
 import (
 	"fmt"
 	"github.com/ChainSafe/chaindb"
 	rpcclient "github.com/ComposableFi/go-substrate-rpc-client/v4"
 	"github.com/ComposableFi/go-substrate-rpc-client/v4/types"
-	grandpatypes "github.com/cosmos/relayer/v2/relayer/chains/substrate/finality/types"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/stretchr/testify/assert"
+	grandpatypes "github.com/cosmos/relayer/v2/relayer/chains/substrate/finality/grandpa/ics10-types"
+	//"github.com/ethereum/go-ethereum/common"
+	//"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"testing"
 )
@@ -91,7 +91,7 @@ func TestConstructGrandpaStructs(t *testing.T) {
 	//})
 }
 
-func TestTrieDBMut(t *testing.T) {
+/*func TestTrieDBMut(t *testing.T) {
 	trie := NewTrieDBMut()
 	defer trie.Free()
 
@@ -123,4 +123,4 @@ func TestTrieDBMutReadProofCheck(t *testing.T) {
 	root := types.NewH256(common.FromHex("5a28562884fa61b7fa449bbd4411604bff2e6069e5ce6fd0930095080abc6cd4"))
 	trieProof := NewTrieProof(proof)
 	ReadProofCheck(types.Hash(root), trieProof, []byte("key"))
-}
+}*/

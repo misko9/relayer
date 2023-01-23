@@ -4,18 +4,18 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"math"
 	"path"
-	"strings"
 	"time"
 
 	"github.com/cosmos/relayer/v2/relayer/chains/substrate/finality"
+	grandpa "github.com/cosmos/relayer/v2/relayer/chains/substrate/finality/grandpa"
+	beefy "github.com/cosmos/relayer/v2/relayer/chains/substrate/finality/beefy"
 
 	"github.com/ChainSafe/chaindb"
 	rpcclient "github.com/ComposableFi/go-substrate-rpc-client/v4"
 	beefyclienttypes "github.com/ComposableFi/ics11-beefy/types"
 	ibcexported "github.com/cosmos/ibc-go/v5/modules/core/exported"
-	grandpaclienttypes "github.com/cosmos/relayer/v2/relayer/chains/substrate/finality/types"
+	grandpaclienttypes "github.com/cosmos/relayer/v2/relayer/chains/substrate/finality/grandpa/ics10-types"
 	"github.com/cosmos/relayer/v2/relayer/chains/substrate/keystore"
 	"github.com/cosmos/relayer/v2/relayer/provider"
 	"github.com/gogo/protobuf/proto"
@@ -48,6 +48,7 @@ type SubstrateProviderConfig struct {
 	BeefyActivationBlock uint32  `json:"beefy-activation-block" yaml:"beefy-activation-block"`
 	RelayChain           int32   `json:"relay-chain" yaml:"relay-chain"`
 	FinalityProtocol     string  `json:"finality-protocol" yaml:"finality-protocol"`
+	WasmClient           bool    `json:"wasm_client" yaml:"wasm_client"`
 }
 
 func (spc SubstrateProviderConfig) Validate() error {
@@ -101,11 +102,6 @@ func (sp *SubstrateProvider) Init() error {
 	fmt.Println("RPCAddr", sp.Config.RPCAddr)
 	fmt.Println("RelayRPCAddr", sp.Config.RelayRPCAddr)
 	fmt.Println("FinalityProtocol", sp.Config.FinalityProtocol)
-	split := strings.Split(sp.Config.RPCAddr, ",")
-	if len(split) > 1 {
-		sp.Config.RPCAddr = split[0]
-		sp.Config.RelayRPCAddr = split[1]
-	}
 	client, err := rpcclient.NewSubstrateAPI(sp.Config.RPCAddr)
 	if err != nil {
 		return err
@@ -117,12 +113,12 @@ func (sp *SubstrateProvider) Init() error {
 	}
 
 	switch sp.Config.FinalityProtocol {
-	case finality.BeefyFinalityGadget:
-		sp.FinalityGadget = finality.NewBeefy(client, relaychainClient, sp.Config.ParaID,
+	case beefy.BeefyFinalityGadget:
+		sp.FinalityGadget = beefy.NewBeefy(client, relaychainClient, sp.Config.ParaID,
 			sp.Config.BeefyActivationBlock, sp.Memdb)
-	case finality.GrandpaFinalityGadget:
+	case grandpa.GrandpaFinalityGadget:
 		clientState := grandpaclienttypes.ClientState{}
-		sp.FinalityGadget = finality.NewGrandpa(client, relaychainClient, sp.Config.ParaID,
+		sp.FinalityGadget = grandpa.NewGrandpa(client, relaychainClient, sp.Config.ParaID,
 			sp.Config.RelayChain, sp.Memdb, &clientState)
 	default:
 		return fmt.Errorf("unsupported finality gadget")
@@ -200,7 +196,7 @@ func (sp *SubstrateProvider) Timeout() string {
 
 func (sp *SubstrateProvider) TrustingPeriod(ctx context.Context) (time.Duration, error) {
 	// TODO: implement a proper trusting period
-	return time.Duration(math.MaxInt), nil
+	return time.Duration(1000), nil
 }
 
 func (sp *SubstrateProvider) WaitForNBlocks(ctx context.Context, n int64) error {

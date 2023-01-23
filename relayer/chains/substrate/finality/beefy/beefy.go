@@ -1,6 +1,7 @@
-package finality
+package beefy
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/ChainSafe/chaindb"
@@ -8,6 +9,7 @@ import (
 	beefyclienttypes "github.com/ComposableFi/ics11-beefy/types"
 	ibcexported "github.com/cosmos/ibc-go/v5/modules/core/exported"
 	"github.com/cosmos/relayer/v2/relayer/provider"
+	"github.com/cosmos/relayer/v2/relayer/chains/substrate/finality"
 )
 
 const BeefyFinalityGadget = "beefy"
@@ -25,7 +27,7 @@ func (h BeefyIBCHeader) ConsensusState() ibcexported.ConsensusState {
 	return h.SignedHeader.ConsensusState()
 }
 
-var _ FinalityGadget = &Beefy{}
+var _ finality.FinalityGadget = &Beefy{}
 
 type Beefy struct {
 	parachainClient      *rpcclient.SubstrateAPI
@@ -110,7 +112,7 @@ func (b *Beefy) QueryHeaderAt(relayChainHeight uint64) (header ibcexported.Heade
 	return
 }
 
-func (b *Beefy) QueryLatestHeight() (int64, int64, error) {
+func (b *Beefy) QueryLatestHeight(ctx context.Context) (int64, int64, error) {
 	signedHash, err := b.relayChainClient.RPC.Beefy.GetFinalizedHead()
 	if err != nil {
 		return 0, 0, err

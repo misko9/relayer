@@ -1,4 +1,4 @@
-package finality
+package beefy
 
 import (
 	"bytes"
@@ -11,6 +11,7 @@ import (
 	"github.com/ComposableFi/go-merkle-trees/mmr"
 	rpcclienttypes "github.com/ComposableFi/go-substrate-rpc-client/v4/types"
 	beefyclienttypes "github.com/ComposableFi/ics11-beefy/types"
+	"github.com/cosmos/relayer/v2/relayer/chains/substrate/finality"
 	"github.com/OneOfOne/xxhash"
 	"github.com/ethereum/go-ethereum/crypto"
 	"golang.org/x/exp/maps"
@@ -19,10 +20,7 @@ import (
 type Authorities = [][33]uint8
 
 const (
-	prefixParas           = "Paras"
 	prefixBeefy           = "Beefy"
-	methodParachains      = "Parachains"
-	methodHeads           = "Heads"
 	methodAuthorities     = "Authorities"
 	methodNextAuthorities = "NextAuthorities"
 )
@@ -106,7 +104,7 @@ func (b *Beefy) fetchParaIds(blockHash rpcclienttypes.Hash) ([]uint32, error) {
 		return nil, err
 	}
 
-	storageKey, err := rpcclienttypes.CreateStorageKey(meta, prefixParas, methodParachains, nil, nil)
+	storageKey, err := rpcclienttypes.CreateStorageKey(meta, finality.PrefixParas, finality.MethodParachains, nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +124,7 @@ func (b *Beefy) fetchParaIds(blockHash rpcclienttypes.Hash) ([]uint32, error) {
 }
 
 func (b *Beefy) paraHeadData(blockHash rpcclienttypes.Hash) ([]byte, error) {
-	paraKey, err := parachainHeaderKey(b.paraID)
+	paraKey, err := finality.ParachainHeaderKey(b.paraID)
 	if err != nil {
 		return nil, err
 	}
@@ -292,7 +290,7 @@ func (b *Beefy) parachainHeaderKeys(
 
 	var paraHeaderKeys []rpcclienttypes.StorageKey
 	// create full storage key for each known paraId.
-	keyPrefix := rpcclienttypes.CreateStorageKeyPrefix(prefixParas, methodHeads)
+	keyPrefix := rpcclienttypes.CreateStorageKeyPrefix(finality.PrefixParas, finality.MethodHeads)
 	// so we can query all blocks from lastfinalized to latestBeefyHeight
 	for _, paraId := range paraIds {
 		encodedParaId, err := rpcclienttypes.Encode(paraId)
@@ -377,7 +375,7 @@ func (b *Beefy) constructParachainHeaders(
 			return nil, err
 		}
 
-		timestampExt, extProof, err := constructExtrinsics(b.parachainClient,
+		timestampExt, extProof, err := finality.ConstructExtrinsics(b.parachainClient,
 			uint64(parachainHeaderDecoded.Number), b.memDB)
 		if err != nil {
 			return nil, err

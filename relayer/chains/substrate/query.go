@@ -62,6 +62,7 @@ func (sp *SubstrateProvider) QueryBalanceWithAddress(ctx context.Context, addres
 }
 
 // QueryUnbondingPeriod returns the unbonding period of the chain
+// TODO populate with real unbonding period
 func (sp *SubstrateProvider) QueryUnbondingPeriod(ctx context.Context) (time.Duration, error) {
 	return 0, nil
 }
@@ -440,8 +441,8 @@ func (sp *SubstrateProvider) QueryPacketReceipt(ctx context.Context, height int6
 	return
 }
 
-func (sp *SubstrateProvider) QueryLatestHeight(_ context.Context) (int64, error) {
-	paraHeight, relayChainHeight, err := sp.FinalityGadget.QueryLatestHeight()
+func (sp *SubstrateProvider) QueryLatestHeight(ctx context.Context) (int64, error) {
+	paraHeight, relayChainHeight, err := sp.FinalityGadget.QueryLatestHeight(ctx)
 	if err != nil {
 		return 0, err
 	}

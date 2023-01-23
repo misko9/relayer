@@ -1,4 +1,4 @@
-package finality
+package grandpa
 
 import (
 	"bytes"
@@ -10,9 +10,8 @@ import (
 	codec "github.com/ComposableFi/go-substrate-rpc-client/v4/scale"
 	rpcclienttypes "github.com/ComposableFi/go-substrate-rpc-client/v4/types"
 	beefyclienttypes "github.com/ComposableFi/ics11-beefy/types"
-	types2 "github.com/cosmos/ibc-go/v5/modules/core/02-client/types"
-	ibcexported "github.com/cosmos/ibc-go/v5/modules/core/exported"
-	"github.com/cosmos/relayer/v2/relayer/chains/substrate/finality/types"
+	"github.com/cosmos/relayer/v2/relayer/chains/substrate/finality"
+	"github.com/cosmos/relayer/v2/relayer/chains/substrate/finality/grandpa/ics10-types"
 	"golang.org/x/exp/slices"
 	"sort"
 )
@@ -81,7 +80,7 @@ func (g *Grandpa) getParachainHeader(finalizedRelayHash rpcclienttypes.Hash) (rp
 }
 
 func (g *Grandpa) parachainheaderStorageKey() (rpcclienttypes.StorageKey, error) {
-	keyPrefix := rpcclienttypes.CreateStorageKeyPrefix(prefixParas, methodHeads)
+	keyPrefix := rpcclienttypes.CreateStorageKeyPrefix(finality.PrefixParas, finality.MethodHeads)
 	encodedParaId, err := rpcclienttypes.Encode(g.paraID)
 	if err != nil {
 		return nil, err
@@ -171,7 +170,7 @@ func (g *Grandpa) fetchParachainHeadersWithRelaychainHash(
 	blockHash rpcclienttypes.Hash,
 	previouslyFinalizedHash *rpcclienttypes.Hash,
 ) ([]*types.ParachainHeaderWithRelayHash, error) {
-	paraHeaderKey, err := parachainHeaderKey(g.paraID)
+	paraHeaderKey, err := finality.ParachainHeaderKey(g.paraID)
 	if err != nil {
 		return nil, err
 	}
@@ -204,7 +203,7 @@ func (g *Grandpa) fetchParachainHeadersWithRelaychainHash(
 			return nil, err
 		}
 
-		key, err := rpcclienttypes.CreateStorageKey(meta, prefixParas, methodHeads, encodedParaId)
+		key, err := rpcclienttypes.CreateStorageKey(meta, finality.PrefixParas, finality.MethodHeads, encodedParaId)
 		if err != nil {
 			return nil, err
 		}
@@ -228,7 +227,7 @@ func (g *Grandpa) fetchParachainHeadersWithRelaychainHash(
 			return nil, err
 		}
 
-		extrinsic, extrinsicProof, err := constructExtrinsics(g.parachainClient, uint64(paraHeader.Number), g.memDB)
+		extrinsic, extrinsicProof, err := finality.ConstructExtrinsics(g.parachainClient, uint64(paraHeader.Number), g.memDB)
 		paraHeadersWithRelayHash = append(paraHeadersWithRelayHash, &types.ParachainHeaderWithRelayHash{
 			ParachainHeader: &types.ParachainHeaderProofs{
 				StateProof:     stateProof.Proof,
@@ -273,42 +272,7 @@ func (g *Grandpa) constructHeader(blockHash rpcclienttypes.Hash,
 }
 */
 
-type ParachainHeadersWithFinalityProof struct {
-	FinalityProof    *FinalityProof
-	ParachainHeaders []types.ParachainHeaderWithRelayHash
-	current          int
-}
 
-func (p *ParachainHeadersWithFinalityProof) Reset() {
-	p.FinalityProof = nil
-	p.ParachainHeaders = nil
-}
-
-func (p *ParachainHeadersWithFinalityProof) String() string {
-	return fmt.Sprintf("FinalityProof: %v, ParachainHeaders: %v", p.FinalityProof, p.ParachainHeaders)
-}
-
-func (p *ParachainHeadersWithFinalityProof) ProtoMessage() {
-	fmt.Println("ProtoMessage")
-}
-
-func (p *ParachainHeadersWithFinalityProof) ClientType() string {
-	return types.ClientType
-}
-
-func (p *ParachainHeadersWithFinalityProof) GetHeight() ibcexported.Height {
-	fmt.Println("TODO: GetHeight")
-	return types2.Height{
-		RevisionNumber: 0,
-		RevisionHeight: 0,
-	}
-	//return p.ParachainHeaders[current].ParachainHeader.StateProof
-}
-
-func (p *ParachainHeadersWithFinalityProof) ValidateBasic() error {
-	fmt.Println("TODO: ValidateBasic")
-	return nil
-}
 
 type PersistedValidationData struct {
 	// The parent head-data.
@@ -417,6 +381,9 @@ func (g *Grandpa) queryFinalizedParachainHeadersWithProof(
 	clientState *types.ClientState,
 	latestFinalizedHeight uint32,
 	headerNumbers []rpcclienttypes.BlockNumber) (*ParachainHeadersWithFinalityProof, error) {
+		// Client state isn't populated yet... and why +1? Should be -1?
+		// Maybe that is why it is +1, if client state LatestParaHeight can be 0. Seems wacky.
+		// Name should maybe change to earliestNewParaHash
 	previousParaHash, err := g.parachainClient.RPC.Chain.GetBlockHash(uint64(clientState.LatestParaHeight) + 1)
 	if err != nil {
 		return nil, err
@@ -433,7 +400,9 @@ func (g *Grandpa) queryFinalizedParachainHeadersWithProof(
 	if !ok {
 		return nil, fmt.Errorf("%s: storage key %v, block hash %v", ErrValidationDataNotFound, storageKey, previousParaHash)
 	}
-	// This ensures we don't miss any parachain blocks.
+	// This ensures we don't miss any parachain blocks. (should this matter?)
+	// We check if the latest relay height is < previousFinalizedheight, if it is then we re-do the previo
+	// But client state isn't populated yet in create client... this will start from 0, okay for now/testing only
 	previousFinalizedHeight := uint32(validationData.RelayParentNumber)
 	if clientState.LatestRelayHeight < previousFinalizedHeight {
 		previousFinalizedHeight = clientState.LatestRelayHeight
@@ -445,6 +414,9 @@ func (g *Grandpa) queryFinalizedParachainHeadersWithProof(
 	if err != nil {
 		return nil, err
 	}
+	// Here, we got the new session/epoch end and
+	// if != clientState.LatestRelayHeight && is < latestFinalizedHeight, set latestFinalizedHeight to sessionEnd
+	// We do this to detect a new epoch/session and start at the beginning (another check for missing parachain blocks? around epoch's?)
 	if clientState.LatestRelayHeight != sessionEnd && latestFinalizedHeight > sessionEnd {
 		latestFinalizedHeight = sessionEnd
 	}
@@ -508,10 +480,11 @@ func (g *Grandpa) queryFinalizedParachainHeadersWithProof(
 		return nil, err
 	}
 
-	var parachainHeadersWithProof = make(map[rpcclienttypes.Hash]types.ParachainHeaderProofs)
+	var parachainHeadersWithRelayHash []types.ParachainHeaderWithRelayHash
+	//var parachainHeadersWithProof = make(map[rpcclienttypes.Hash]types.ParachainHeaderProofs)
 	var paraHeaders []Pair[rpcclienttypes.Hash, rpcclienttypes.Header]
 
-	var proofs []TrieProof
+	//var trieProofs []TrieProof
 	for _, changes := range changeSet {
 		header, err := g.relayChainClient.RPC.Chain.GetHeader(changes.Block)
 		if err != nil {
@@ -529,7 +502,7 @@ func (g *Grandpa) queryFinalizedParachainHeadersWithProof(
 		if err != nil {
 			return nil, err
 		}
-		key, err := rpcclienttypes.CreateStorageKey(g.relayMetadata, prefixParas, methodHeads, encodedParaId)
+		key, err := rpcclienttypes.CreateStorageKey(g.relayMetadata, finality.PrefixParas, finality.MethodHeads, encodedParaId)
 		if err != nil {
 			return nil, err
 		}
@@ -560,18 +533,24 @@ func (g *Grandpa) queryFinalizedParachainHeadersWithProof(
 		if err != nil {
 			return nil, err
 		}
-		proof := slices.Clone(timeStampExtWithProof.Proof.Proof)
-		proofs = append(proofs, timeStampExtWithProof.Proof)
+		//proof := slices.Clone(timeStampExtWithProof.Proof.Proof)
+		//trieProofs = append(trieProofs, timeStampExtWithProof.Proof)
 		proofs := types.ParachainHeaderProofs{
 			StateProof:     stateProof.Proof,
+			//Extrinsic:      nil,
 			Extrinsic:      timeStampExtWithProof.Ext,
-			ExtrinsicProof: proof,
+			ExtrinsicProof: nil,
+			//ExtrinsicProof: proof,
 		}
-		parachainHeadersWithProof[headerHash] = proofs
+		parachainHeadersWithRelayHash = append(parachainHeadersWithRelayHash, types.ParachainHeaderWithRelayHash{
+			RelayHash: headerHash[:],
+			ParachainHeader: &proofs,
+		})
+		//parachainHeadersWithProof[headerHash] = proofs
 	}
-	for _, p := range proofs {
-		p.Free()
-	}
+	//for _, p := range trieProofs {
+	//	p.Free()
+	//}
 
 	if len(paraHeaders) > 0 {
 		relayHash, _ := paraHeaders[0].First, paraHeaders[0].Second
@@ -605,7 +584,8 @@ func (g *Grandpa) queryFinalizedParachainHeadersWithProof(
 
 	phwfp := &ParachainHeadersWithFinalityProof{
 		FinalityProof:    &finalityProof,
-		ParachainHeaders: []types.ParachainHeaderWithRelayHash{},
+		ParachainHeaders: parachainHeadersWithRelayHash,
+		//ParachainHeaders: []types.ParachainHeaderWithRelayHash{},
 	}
 	return phwfp, nil
 }
@@ -656,17 +636,6 @@ func (ac *AncestryChain) Ancestry(base, block rpcclienttypes.Hash) ([]rpcclientt
 	return route, nil
 }
 
-type Pair[T, U any] struct {
-	First  T
-	Second U
-}
-
-func (p *Pair[T, U]) Decode(decoder codec.Decoder) error {
-	var err error
-	err = decoder.Decode(&p.First)
-	err = decoder.Decode(&p.Second)
-	return err
-}
 
 func (g *Grandpa) sessionEndForBlock(block uint32) (uint32, error) {
 	blockHash, err := g.relayChainClient.RPC.Chain.GetBlockHash(uint64(block))
@@ -694,35 +663,3 @@ func (g *Grandpa) sessionEndForBlock(block uint32) (uint32, error) {
 	return currentEpochStart + (currentEpochStart - previousEpochStart), nil
 }
 
-type LocalHeader rpcclienttypes.Header
-
-func (header *LocalHeader) Decode(decoder codec.Decoder) error {
-	var err error
-	var bn uint32
-	err = decoder.Decode(&bn)
-	if err != nil {
-		return err
-	}
-	header.Number = rpcclienttypes.BlockNumber(bn)
-	err = decoder.Decode(&header.ParentHash)
-	if err != nil {
-		return err
-	}
-	err = decoder.Decode(&header.StateRoot)
-	if err != nil {
-		return err
-	}
-	err = decoder.Decode(&header.ExtrinsicsRoot)
-	if err != nil {
-		return err
-	}
-	err = decoder.Decode(&header.Digest)
-	if err != nil {
-		return err
-	}
-	_, err = decoder.ReadOneByte()
-	if err == nil {
-		return fmt.Errorf("unexpected data after decoding header")
-	}
-	return nil
-}

@@ -10,7 +10,7 @@ import (
 	clienttypes "github.com/cosmos/ibc-go/v5/modules/core/02-client/types"
 	ibcexported "github.com/cosmos/ibc-go/v5/modules/core/exported"
 	tmclient "github.com/cosmos/ibc-go/v5/modules/light-clients/07-tendermint/types"
-	grandpaclienttypes "github.com/cosmos/relayer/v2/relayer/chains/substrate/finality/types"
+	grandpaclienttypes "github.com/cosmos/relayer/v2/relayer/chains/substrate/finality/grandpa/ics10-types"
 )
 
 // ClientsMatch will check the type of an existing light client on the src chain, tracking the dst chain, and run

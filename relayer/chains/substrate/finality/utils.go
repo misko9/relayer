@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-func constructExtrinsics(
+func ConstructExtrinsics(
 	conn *rpcclient.SubstrateAPI,
 	blockNumber uint64, memDB *chaindb.BadgerDB,
 ) (timestampExtrinsic []byte, extrinsicProof [][]byte, err error) {
@@ -74,8 +74,8 @@ func constructExtrinsics(
 	return
 }
 
-func parachainHeaderKey(paraID uint32) ([]byte, error) {
-	keyPrefix := rpcclienttypes.CreateStorageKeyPrefix(prefixParas, methodHeads)
+func ParachainHeaderKey(paraID uint32) ([]byte, error) {
+	keyPrefix := rpcclienttypes.CreateStorageKeyPrefix(PrefixParas, MethodHeads)
 	encodedParaId, err := rpcclienttypes.Encode(paraID)
 	if err != nil {
 		return nil, err
@@ -86,7 +86,7 @@ func parachainHeaderKey(paraID uint32) ([]byte, error) {
 	return fullKey, nil
 }
 
-func decodeExtrinsicTimestamp(encodedExtrinsic []byte) (time.Time, error) {
+func DecodeExtrinsicTimestamp(encodedExtrinsic []byte) (time.Time, error) {
 	var extrinsic rpcclienttypes.Extrinsic
 	decodeErr := rpcclienttypes.Decode(encodedExtrinsic, &extrinsic)
 	if decodeErr != nil {
